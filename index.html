@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realistic 3D Rubik's Cube</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+        
+        header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            text-align: center;
+            color: white;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from {
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3), 0 0 10px rgba(255, 255, 255, 0.5);
+            }
+            to {
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3), 0 0 20px rgba(255, 255, 255, 0.8);
+            }
+        }
+        
+        .main-container {
+            display: flex;
+            flex: 1;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            padding: 2rem;
+        }
+        
+        .scene {
+            width: 300px;
+            height: 300px;
+            perspective: 1000px;
+            margin: 2rem;
+        }
+        
+        .cube-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(-25deg) rotateY(-45deg);
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .cube {
+            width: 200px;
+            height: 200px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-style: preserve-3d;
+            transform: translate(-50%, -50%);
+        }
+        
+        .face {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 3px;
+            padding: 3px;
+            background: #1a1a1a;
+            border: 2px solid #000;
+            border-radius: 5px;
+        }
+        
+        .sticker {
+            width: 100%;
+            height: 100%;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .sticker::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .sticker:hover::before {
+            opacity: 1;
+        }
+        
+        .sticker:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+        
+        .face.front {
+            transform: rotateY( 0deg) translateZ(100px);
+        }
+        
+        .face.back {
+            transform: rotateY(180deg) translateZ(100px);
+        }
+        
+        .face.right {
+            transform: rotateY( 90deg) translateZ(100px);
+        }
+        
+        .face.left {
+            transform: rotateY(-90deg) translateZ(100px);
+        }
+        
+        .face.top {
+            transform: rotateX( 90deg) translateZ(100px);
+        }
+        
+        .face.bottom {
+            transform: rotateX(-90deg) translateZ(100px);
+        }
+        
+        .white {
+            background: linear-gradient(135deg, #ffffff, #f0f0f0);
+        }
+        
+        .yellow {
+            background: linear-gradient(135deg, #ffeb3b, #ffc107);
+        }
+        
+        .red {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+        }
+        
+        .orange {
+            background: linear-gradient(135deg, #ff9800, #f57c00);
+        }
+        
+        .green {
+            background: linear-gradient(135deg, #4caf50, #388e3c);
+        }
+        
+        .blue {
+            background: linear-gradient(135deg, #2196f3, #1976d2);
+        }
+        
+        .controls {
+            position: fixed;
+            top: 50%;
+            right: 2rem;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            min-width: 250px;
+        }
+        
+        .control-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .control-group h3 {
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-size: 1.1rem;
+        }
+        
+        .rotation-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+        
+        .btn {
+            padding: 0.8rem 1rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+        
+        .btn-rotate {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-size: 0.8rem;
+            padding: 0.5rem;
+        }
+        
+        .btn-rotate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-action {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            color: white;
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+        
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(240, 147, 251, 0.4);
+        }
+        
+        .btn-solve {
+            background: linear-gradient(135deg, #4caf50, #45a049);
+        }
+        
+        .btn-solve:hover {
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+        
+        .design-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .design-btn {
+            padding: 0.5rem;
+            border: 2px solid transparent;
+            border-radius: 5px;
+            background: linear-gradient(135deg, #e0e0e0, #f5f5f5);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .design-btn:hover,
+        .design-btn.active {
+            border-color: #667eea;
+            transform: scale(1.05);
+        }
+        
+        .stats {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 1rem;
+            border-radius: 10px;
+            position: fixed;
+            top: 2rem;
+            left: 2rem;
+            min-width: 200px;
+        }
+        
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .keyboard-hint {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        
+        .particle {
+            position: fixed;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 1000;
+        }
+        
+        @keyframes particleAnimation {
+            0% {
+                opacity: 1;
+                transform: translate(0, 0) scale(0);
+            }
+            50% {
+                opacity: 0.8;
+                transform: translate(var(--tx), var(--ty)) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(calc(var(--tx) * 2), calc(var(--ty) * 2)) scale(0.5);
+            }
+        }
+        
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .speed-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right, #4caf50, #f44336);
+            outline: none;
+        }
+        
+        .speed-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        
+        @media (max-width: 768px) {
+            .controls {
+                position: static;
+                transform: none;
+                margin: 2rem auto;
+                max-width: 90%;
+            }
+            .stats {
+                position: static;
+                margin: 1rem auto;
+                max-width: 90%;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>🎮 Realistic 3D Rubik's Cube 🎮</h1>
+        <p>Experience the ultimate Rubik's Cube simulation</p>
+    </header>
+
+    <div class="main-container">
+        <div class="scene">
+            <div class="cube-container" id="cubeContainer">
+                <div class="cube" id="cube">
+                    <div class="face front" data-face="front">
+                        <div class="sticker red" data-position="0"></div>
+                        <div class="sticker red" data-position="1"></div>
+                        <div class="sticker red" data-position="2"></div>
+                        <div class="sticker red" data-position="3"></div>
+                        <div class="sticker red" data-position="4"></div>
+                        <div class="sticker red" data-position="5"></div>
+                        <div class="sticker red" data-position="6"></div>
+                        <div class="sticker red" data-position="7"></div>
+                        <div class="sticker red" data-position="8"></div>
+                    </div>
+                    <div class="face back" data-face="back">
+                        <div class="sticker orange" data-position="0"></div>
+                        <div class="sticker orange" data-position="1"></div>
+                        <div class="sticker orange" data-position="2"></div>
+                        <div class="sticker orange" data-position="3"></div>
+                        <div class="sticker orange" data-position="4"></div>
+                        <div class="sticker orange" data-position="5"></div>
+                        <div class="sticker orange" data-position="6"></div>
+                        <div class="sticker orange" data-position="7"></div>
+                        <div class="sticker orange" data-position="8"></div>
+                    </div>
+                    <div class="face right" data-face="right">
+                        <div class="sticker green" data-position="0"></div>
+                        <div class="sticker green" data-position="1"></div>
+                        <div class="sticker green" data-position="2"></div>
+                        <div class="sticker green" data-position="3"></div>
+                        <div class="sticker green" data-position="4"></div>
+                        <div class="sticker green" data-position="5"></div>
+                        <div class="sticker green" data-position="6"></div>
+                        <div class="sticker green" data-position="7"></div>
+                        <div class="sticker green" data-position="8"></div>
+                    </div>
+                    <div class="face left" data-face="left">
+                        <div class="sticker blue" data-position="0"></div>
+                        <div class="sticker blue" data-position="1"></div>
+                        <div class="sticker blue" data-position="2"></div>
+                        <div class="sticker blue" data-position="3"></div>
+                        <div class="sticker blue" data-position="4"></div>
+                        <div class="sticker blue" data-position="5"></div>
+                        <div class="sticker blue" data-position="6"></div>
+                        <div class="sticker blue" data-position="7"></div>
+                        <div class="sticker blue" data-position="8"></div>
+                    </div>
+                    <div class="face top" data-face="top">
+                        <div class="sticker white" data-position="0"></div>
+                        <div class="sticker white" data-position="1"></div>
+                        <div class="sticker white" data-position="2"></div>
+                        <div class="sticker white" data-position="3"></div>
+                        <div class="sticker white" data-position="4"></div>
+                        <div class="sticker white" data-position="5"></div>
+                        <div class="sticker white" data-position="6"></div>
+                        <div class="sticker white" data-position="7"></div>
+                        <div class="sticker white" data-position="8"></div>
+                    </div>
+                    <div class="face bottom" data-face="bottom">
+                        <div class="sticker yellow" data-position="0"></div>
+                        <div class="sticker yellow" data-position="1"></div>
+                        <div class="sticker yellow" data-position="2"></div>
+                        <div class="sticker yellow" data-position="3"></div>
+                        <div class="sticker yellow" data-position="4"></div>
+                        <div class="sticker yellow" data-position="5"></div>
+                        <div class="sticker yellow" data-position="6"></div>
+                        <div class="sticker yellow" data-position="7"></div>
+                        <div class="sticker yellow" data-position="8"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats">
+        <h3>Statistics</h3>
+        <div class="stat-item">
+            <span>Moves:</span>
+            <span id="moveCount">0</span>
+        </div>
+        <div class="stat-item">
+            <span>Time:</span>
+            <span id="timer">00:00</span>
+        </div>
+        <div class="stat-item">
+            <span>Status:</span>
+            <span id="status">Ready</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <h3>🎯 Cube Rotations</h3>
+            <div class="rotation-controls">
+                <button class="btn btn-rotate" onclick="rotateFace('U')">U</button>
+                <button class="btn btn-rotate" onclick="rotateFace('Ui')">Ui</button>
+                <button class="btn btn-rotate" onclick="rotateFace('F')">F</button>
+                <button class="btn btn-rotate" onclick="rotateFace('R')">R</button>
+                <button class="btn btn-rotate" onclick="rotateFace('L')">L</button>
+                <button class="btn btn-rotate" onclick="rotateFace('B')">B</button>
+                <button class="btn btn-rotate" onclick="rotateFace('D')">D</button>
+                <button class="btn btn-rotate" onclick="rotateFace('Ri')">Ri</button>
+                <button class="btn btn-rotate" onclick="rotateFace('Li')">Li</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>🎮 Game Controls</h3>
+            <button class="btn btn-action" onclick="scrambleCube()">🔀 Scramble</button>
+            <button class="btn btn-action btn-solve" onclick="solveCube()">✨ Solve</button>
+            <button class="btn btn-action" onclick="resetCube()">🔄 Reset</button>
+        </div>
+
+        <div class="control-group">
+            <h3>🎨 Design Themes</h3>
+            <div class="design-selector">
+                <button class="design-btn active" onclick="changeDesign('classic')">🌈 Classic</button>
+                <button class="design-btn" onclick="changeDesign('neon')">💫 Neon</button>
+                <button class="design-btn" onclick="changeDesign('metallic')">⚡ Metallic</button>
+                <button class="design-btn" onclick="changeDesign('glass')">🔮 Glass</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>⚡ Animation Speed</h3>
+            <div class="speed-control">
+                <span>Fast</span>
+                <input type="range" class="speed-slider" id="speedSlider" min="100" max="1000" value="300">
+                <span>Slow</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="keyboard-hint">
+        💡 Use keyboard: Q/W/E/A/S/D for rotations | Space to scramble | Enter to solve
+    </div>
+
+    <script>
+        class RubiksCube {
+            constructor() {
+                this.cubeState = this.getInitialState();
+                this.moveCount = 0;
+                this.startTime = null;
+                this.timerInterval = null;
+                this.isAnimating = false;
+                this.rotationQueue = [];
+                this.animationSpeed = 300;
+                this.currentDesign = 'classic';
+                this.initializeEventListeners();
+                this.initializeKeyboardControls();
+                this.updateDisplay();
+            }
+
+            getInitialState() {
+                return {
+                    front: ['red', 'red', 'red', 'red', 'red', 'red', 'red', 'red', 'red'],
+                    back: ['orange', 'orange', 'orange', 'orange', 'orange', 'orange', 'orange', 'orange', 'orange'],
+                    right: ['green', 'green', 'green', 'green', 'green', 'green', 'green', 'green', 'green'],
+                    left: ['blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue'],
+                    top: ['white', 'white', 'white', 'white', 'white', 'white', 'white', 'white', 'white'],
+                    bottom: ['yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'yellow', 'yellow']
+                };
+            }
+
+            initializeEventListeners() {
+                const speedSlider = document.getElementById('speedSlider');
+                speedSlider.addEventListener('input', (e) => {
+                    this.animationSpeed = 1100 - parseInt(e.target.value);
+                });
+
+                const cubeContainer = document.getElementById('cubeContainer');
+                let isDragging = false;
+                let startX, startY;
+                let currentX = -25,
+                    currentY = -45;
+
+                cubeContainer.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    cubeContainer.style.cursor = 'grabbing';
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    const deltaX = e.clientX - startX;
+                    const deltaY = e.clientY - startY;
+                    currentY += deltaX * 0.5;
+                    currentX -= deltaY * 0.5;
+                    cubeContainer.style.transform = `rotateX(${currentX}deg) rotateY(${currentY}deg)`;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                });
+
+                document.addEventListener('mouseup', () => {
+                    isDragging = false;
+                    cubeContainer.style.cursor = 'grab';
+                });
+
+                cubeContainer.style.cursor = 'grab';
+            }
+
+            initializeKeyboardControls() {
+                document.addEventListener('keydown', (e) => {
+                    if (this.isAnimating) return;
+
+                    switch (e.key.toLowerCase()) {
+                        case 'q':
+                            this.rotate('U');
+                            break;
+                        case 'w':
+                            this.rotate('F');
+                            break;
+                        case 'e':
+                            this.rotate('R');
+                            break;
+                        case 'a':
+                            this.rotate('L');
+                            break;
+                        case 's':
+                            this.rotate('B');
+                            break;
+                        case 'd':
+                            this.rotate('D');
+                            break;
+                        case ' ':
+                            e.preventDefault();
+                            this.scramble();
+                            break;
+                        case 'enter':
+                            this.solve();
+                            break;
+                    }
+                });
+            }
+
+            rotateFace(notation) {
+                if (this.isAnimating) return;
+                this.rotate(notation);
+            }
+
+            rotate(notation) {
+                if (this.isAnimating) return;
+
+                this.isAnimating = true;
+                this.startTimer();
+
+                const moves = {
+                    'U': () => this.rotateClockwise('top'),
+                    'Ui': () => this.rotateCounterClockwise('top'),
+                    'D': () => this.rotateClockwise('bottom'),
+                    'Di': () => this.rotateCounterClockwise('bottom'),
+                    'F': () => this.rotateClockwise('front'),
+                    'Fi': () => this.rotateCounterClockwise('front'),
+                    'B': () => this.rotateClockwise('back'),
+                    'Bi': () => this.rotateCounterClockwise('back'),
+                    'R': () => this.rotateClockwise('right'),
+                    'Ri': () => this.rotateCounterClockwise('right'),
+                    'L': () => this.rotateClockwise('left'),
+                    'Li': () => this.rotateCounterClockwise('left')
+                };
+
+                if (moves[notation]) {
+                    moves[notation]();
+                    this.moveCount++;
+                    this.updateStats();
+                    this.createParticleEffect();
+                }
+
+                setTimeout(() => {
+                    this.isAnimating = false;
+                }, this.animationSpeed);
+            }
+
+            rotateClockwise(face) {
+                const temp = [...this.cubeState[face]];
+                this.cubeState[face] = [
+                    temp[6], temp[3], temp[0],
+                    temp[7], temp[4], temp[1],
+                    temp[8], temp[5], temp[2]
+                ];
+
+                this.updateAdjacentFaces(face, 'clockwise');
+                this.updateDisplay();
+            }
+
+            rotateCounterClockwise(face) {
+                const temp = [...this.cubeState[face]];
+                this.cubeState[face] = [
+                    temp[2], temp[5], temp[8],
+                    temp[1], temp[4], temp[7],
+                    temp[0], temp[3], temp[6]
+                ];
+
+                this.updateAdjacentFaces(face, 'counterclockwise');
+                this.updateDisplay();
+            }
+
+            updateAdjacentFaces(face, direction) {
+                const adjacencyMap = {
+                    'front': {
+                        'clockwise': () => {
+                            const temp = [this.cubeState.top[6], this.cubeState.top[7], this.cubeState.top[8]];
+                            [this.cubeState.top[6], this.cubeState.top[7], this.cubeState.top[8]] = [this.cubeState.left[8], this.cubeState.left[5], this.cubeState.left[2]];
+                            [this.cubeState.left[2], this.cubeState.left[5], this.cubeState.left[8]] = [this.cubeState.bottom[0], this.cubeState.bottom[1], this.cubeState.bottom[2]];
+                            [this.cubeState.bottom[0], this.cubeState.bottom[1], this.cubeState.bottom[2]] = [this.cubeState.right[6], this.cubeState.right[3], this.cubeState.right[0]];
+                            [this.cubeState.right[0], this.cubeState.right[3], this.cubeState.right[6]] = temp;
+                        },
+                        'counterclockwise': () => {
+                            const temp = [this.cubeState.top[6], this.cubeState.top[7], this.cubeState.top[8]];
+                            [this.cubeState.top[6], this.cubeState.top[7], this.cubeState.top[8]] = [this.cubeState.right[0], this.cubeState.right[3], this.cubeState.right[6]];
+                            [this.cubeState.right[0], this.cubeState.right[3], this.cubeState.right[6]] = [this.cubeState.bottom[2], this.cubeState.bottom[1], this.cubeState.bottom[0]];
+                            [this.cubeState.bottom[0], this.cubeState.bottom[1], this.cubeState.bottom[2]] = [this.cubeState.left[2], this.cubeState.left[5], this.cubeState.left[8]];
+                            [this.cubeState.left[2], this.cubeState.left[5], this.cubeState.left[8]] = temp;
+                        }
+                    },
+                    'top': {
+                        'clockwise': () => {
+                            const temp = [this.cubeState.front[0], this.cubeState.front[1], this.cubeState.front[2]];
+                            [this.cubeState.front[0], this.cubeState.front[1], this.cubeState.front[2]] = [this.cubeState.right[0], this.cubeState.right[1], this.cubeState.right[2]];
+                            [this.cubeState.right[0], this.cubeState.right[1], this.cubeState.right[2]] = [this.cubeState.back[0], this.cubeState.back[1], this.cubeState.back[2]];
+                            [this.cubeState.back[0], this.cubeState.back[1], this.cubeState.back[2]] = [this.cubeState.left[0], this.cubeState.left[1], this.cubeState.left[2]];
+                            [this.cubeState.left[0], this.cubeState.left[1], this.cubeState.left[2]] = temp;
+                        },
+                        'counterclockwise': () => {
+                            const temp = [this.cubeState.front[0], this.cubeState.front[1], this.cubeState.front[2]];
+                            [this.cubeState.front[0], this.cubeState.front[1], this.cubeState.front[2]] = [this.cubeState.left[0], this.cubeState.left[1], this.cubeState.left[2]];
+                            [this.cubeState.left[0], this.cubeState.left[1], this.cubeState.left[2]] = [this.cubeState.back[0], this.cubeState.back[1], this.cubeState.back[2]];
+                            [this.cubeState.back[0], this.cubeState.back[1], this.cubeState.back[2]] = [this.cubeState.right[0], this.cubeState.right[1], this.cubeState.right[2]];
+                            [this.cubeState.right[0], this.cubeState.right[1], this.cubeState.right[2]] = temp;
+                        }
+                    }
+                };
+
+                if (adjacencyMap[face] && adjacencyMap[face][direction]) {
+                    adjacencyMap[face][direction]();
+                }
+            }
+
+            updateDisplay() {
+                Object.keys(this.cubeState).forEach(face => {
+                    const faceElement = document.querySelector(`.face[data-face="${face}"]`);
+                    const stickers = faceElement.querySelectorAll('.sticker');
+
+                    this.cubeState[face].forEach((color, index) => {
+                        stickers[index].className = `sticker ${color}`;
+                    });
+                });
+            }
+
+            scramble() {
+                const moves = ['U', 'Ui', 'D', 'Di', 'F', 'Fi', 'B', 'Bi', 'R', 'Ri', 'L', 'Li'];
+                const scrambleLength = 20;
+                const scrambleSequence = [];
+
+                for (let i = 0; i < scrambleLength; i++) {
+                    const randomMove = moves[Math.floor(Math.random() * moves.length)];
+                    scrambleSequence.push(randomMove);
+                }
+
+                this.executeMoveSequence(scrambleSequence);
+            }
+
+            executeMoveSequence(moves) {
+                let index = 0;
+
+                const executeNext = () => {
+                    if (index < moves.length) {
+                        this.rotate(moves[index]);
+                        index++;
+                        setTimeout(executeNext, this.animationSpeed + 50);
+                    } else {
+                        document.getElementById('status').textContent = 'Scrambled';
+                    }
+                };
+
+                executeNext();
+            }
+
+            solve() {
+                this.cubeState = this.getInitialState();
+                this.updateDisplay();
+                this.moveCount = 0;
+                this.updateStats();
+                this.stopTimer();
+                document.getElementById('status').textContent = 'Solved';
+                this.createCelebrationEffect();
+            }
+
+            reset() {
+                this.cubeState = this.getInitialState();
+                this.updateDisplay();
+                this.moveCount = 0;
+                this.updateStats();
+                this.stopTimer();
+                document.getElementById('status').textContent = 'Ready';
+            }
+
+            startTimer() {
+                if (!this.startTime) {
+                    this.startTime = Date.now();
+                    this.timerInterval = setInterval(() => {
+                        const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+                        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                        const seconds = (elapsed % 60).toString().padStart(2, '0');
+                        document.getElementById('timer').textContent = `${minutes}:${seconds}`;
+                    }, 1000);
+                }
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+                this.startTime = null;
+                document.getElementById('timer').textContent = '00:00';
+            }
+
+            updateStats() {
+                document.getElementById('moveCount').textContent = this.moveCount;
+            }
+
+            createParticleEffect() {
+                const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3'];
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * window.innerWidth + 'px';
+                particle.style.top = Math.random() * window.innerHeight + 'px';
+                particle.style.width = '10px';
+                particle.style.height = '10px';
+                particle.style.borderRadius = '50%';
+                particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+
+                document.body.appendChild(particle);
+
+                particle.style.setProperty('--tx', (Math.random() - 0.5) * 200 + 'px');
+                particle.style.setProperty('--ty', (Math.random() - 0.5) * 200 + 'px');
+                particle.style.animation = 'particleAnimation 1s ease-out forwards';
+
+                setTimeout(() => particle.remove(), 1000);
+            }
+
+            createCelebrationEffect() {
+                for (let i = 0; i < 20; i++) {
+                    setTimeout(() => this.createParticleEffect(), i * 50);
+                }
+            }
+
+            changeDesign(design) {
+                this.currentDesign = design;
+                const designs = {
+                    'classic': {
+                        'white': 'linear-gradient(135deg, #ffffff, #f0f0f0)',
+                        'yellow': 'linear-gradient(135deg, #ffeb3b, #ffc107)',
+                        'red': 'linear-gradient(135deg, #f44336, #d32f2f)',
+                        'orange': 'linear-gradient(135deg, #ff9800, #f57c00)',
+                        'green': 'linear-gradient(135deg, #4caf50, #388e3c)',
+                        'blue': 'linear-gradient(135deg, #2196f3, #1976d2)'
+                    },
+                    'neon': {
+                        'white': 'linear-gradient(135deg, #ff00ff, #00ffff)',
+                        'yellow': 'linear-gradient(135deg, #ffff00, #ff00ff)',
+                        'red': 'linear-gradient(135deg, #ff0080, #ff0000)',
+                        'orange': 'linear-gradient(135deg, #ff8000, #ff4000)',
+                        'green': 'linear-gradient(135deg, #00ff80, #00ff00)',
+                        'blue': 'linear-gradient(135deg, #0080ff, #0000ff)'
+                    },
+                    'metallic': {
+                        'white': 'linear-gradient(135deg, #c0c0c0, #808080)',
+                        'yellow': 'linear-gradient(135deg, #ffd700, #b8860b)',
+                        'red': 'linear-gradient(135deg, #cd5c5c, #8b0000)',
+                        'orange': 'linear-gradient(135deg, #ff8c00, #ff4500)',
+                        'green': 'linear-gradient(135deg, #90ee90, #228b22)',
+                        'blue': 'linear-gradient(135deg, #87ceeb, #000080)'
+                    },
+                    'glass': {
+                        'white': 'linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.4))',
+                        'yellow': 'linear-gradient(135deg, rgba(255,235,59,0.8), rgba(255,193,7,0.4))',
+                        'red': 'linear-gradient(135deg, rgba(244,67,54,0.8), rgba(211,47,47,0.4))',
+                        'orange': 'linear-gradient(135deg, rgba(255,152,0,0.8), rgba(245,124,0,0.4))',
+                        'green': 'linear-gradient(135deg, rgba(76,175,80,0.8), rgba(56,142,60,0.4))',
+                        'blue': 'linear-gradient(135deg, rgba(33,150,243,0.8), rgba(25,118,210,0.4))'
+                    }
+                };
+
+                Object.keys(designs[design]).forEach(color => {
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        .sticker.${color} { background: ${designs[design][color]}; }
+                    `;
+                    document.head.appendChild(style);
+                });
+
+                document.querySelectorAll('.design-btn').forEach(btn => btn.classList.remove('active'));
+                event.target.classList.add('active');
+            }
+        }
+
+        const cube = new RubiksCube();
+
+        function rotateFace(notation) {
+            cube.rotateFace(notation);
+        }
+
+        function scrambleCube() {
+            cube.scramble();
+        }
+
+        function solveCube() {
+            cube.solve();
+        }
+
+        function resetCube() {
+            cube.reset();
+        }
+
+        function changeDesign(design) {
+            cube.changeDesign(design);
+        }
+    </script>
+</body>
+
+</html>
