@@ -1,12 +1,18 @@
 import Modal from '../ui/Modal'
 
 const SHORTCUTS: Array<[string, string]> = [
+  ['Drag sticker (mouse/touch)', 'Layer follows your finger'],
+  ['Release past 45°', 'Snap to a 90° turn (past 135° = 180°)'],
+  ['Short swipe / release early', 'Layer slides back, no move'],
+  ['Drag empty space', 'Rotate the view'],
+  ['Mouse wheel / pinch', 'Zoom in and out'],
+  ['Two-finger drag', 'Rotate the view'],
   ['R / L / U / D / F / B', 'Turn face clockwise'],
-  ['Shift + letter', 'Turn face counter-clockwise'],
+  ["Shift + letter", 'Turn face counter-clockwise'],
   ['Space', 'Start / stop timer'],
   ['Z', 'Undo last move'],
   ['Y', 'Redo move'],
-  ['Drag cube', 'Rotate view'],
+  ['Scramble/Undo/Solve/Reset', 'Action buttons'],
 ]
 
 export default function KeyboardHelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {

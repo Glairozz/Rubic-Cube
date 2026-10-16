@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Keyboard, Redo2, RotateCcw, Shuffle, Undo2, Settings as SettingsIcon, Home } from 'lucide-react'
+import { Keyboard, Loader2, Redo2, RotateCcw, Shuffle, Sparkles, Undo2, Settings as SettingsIcon, Home, Crosshair } from 'lucide-react'
 import CubeScene, { type CubeSceneHandle } from '../components/cube/CubeScene'
 import TimerDisplay from '../components/timer/TimerDisplay'
 import MoveHistory from '../components/stats/MoveHistory'
@@ -8,8 +8,11 @@ import ScrambleBar from '../components/controls/ScrambleBar'
 import SettingsModal from '../components/controls/SettingsModal'
 import KeyboardHelpModal from '../components/controls/KeyboardHelpModal'
 import { useTimer } from '../hooks/useTimer'
+import { useSolver } from '../hooks/useSolver'
 import { generateScramble, scrambleToString } from '../engine/scramble/scramble'
 import { formatMove, invertMove, parseMove, type Move } from '../engine/moves/moves'
+import { algorithmToMoves } from '../engine/cube/cubeModel'
+import { solveFacelet } from '../engine/cube/solver'
 import type { Settings } from '../hooks/useSettings'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 
@@ -26,6 +29,8 @@ export default function CubePage({ settings, updateSettings }: CubePageProps) {
   const [status, setStatus] = useState('Ready')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [solving, setSolving] = useState(false)
+  const solverStatus = useSolver()
   const [best, setBest] = useLocalStorage<number | null>('rubic-best', null)
   const timer = useTimer()
 
@@ -38,6 +43,16 @@ export default function CubePage({ settings, updateSettings }: CubePageProps) {
       }
     },
     [cursor, settings.animationSpeed],
+  )
+
+  /** A move performed by swiping/clicking a sticker inside the 3D scene. */
+  const recordMove = useCallback(
+    (move: Move) => {
+      setMoves((prev) => [...prev.slice(0, cursor), formatMove(move)])
+      setCursor((c) => c + 1)
+      setStatus('Turning')
+    },
+    [cursor],
   )
 
   const scrambleNow = useCallback(() => {
@@ -70,12 +85,14 @@ export default function CubePage({ settings, updateSettings }: CubePageProps) {
     setScramble('')
     setStatus('Ready')
     timer.reset()
+    setSolving(false)
   }, [timer])
 
   const handleSolved = useCallback(
     (solved: boolean) => {
       if (solved) {
         setStatus('Solved')
+        setSolving(false)
         const t = timer.elapsedMs()
         timer.stop()
         if (cursor > 0 && t > 0) {
@@ -85,6 +102,37 @@ export default function CubePage({ settings, updateSettings }: CubePageProps) {
     },
     [cursor, timer, setBest],
   )
+
+  const solveNow = useCallback(async () => {
+    const handle = cubeRef.current
+    if (!handle || handle.busy() || solving) return
+    if (handle.isSolved()) {
+      setStatus('Solved')
+      return
+    }
+    if (solverStatus !== 'ready') return
+    setSolving(true)
+    setStatus('Solving…')
+    timer.stop()
+    const algorithm = await solveFacelet(handle.getStateString())
+    if (!algorithm) {
+      setSolving(false)
+      setStatus('Solver unavailable')
+      return
+    }
+    const solutionMoves = algorithmToMoves(algorithm)
+    if (solutionMoves.length === 0) {
+      setSolving(false)
+      setStatus('Solved')
+      return
+    }
+    solutionMoves.forEach((move) => {
+      handle.applyMove(move, settings.animationSpeed)
+    })
+    const newPlayed = solutionMoves.map(formatMove)
+    setMoves((prev) => [...prev.slice(0, cursor), ...newPlayed])
+    setCursor((c) => c + newPlayed.length)
+  }, [cursor, settings.animationSpeed, solverStatus, solving, timer])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -131,6 +179,15 @@ export default function CubePage({ settings, updateSettings }: CubePageProps) {
     { label: "L'", move: { face: 'L', modifier: "'" } },
   ]
 
+  const doubleButtons: Array<{ label: string; move: Move }> = ['U2', 'D2', 'F2', 'B2', 'R2', 'L2'].map((n) => ({
+    label: n,
+    move: parseMove(n),
+  }))
+
+  const resetCamera = useCallback(() => {
+    cubeRef.current?.resetCamera()
+  }, [])
+
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-neutral-200/60 bg-white/70 backdrop-blur dark:border-neutral-800/70 dark:bg-neutral-950/70">
@@ -157,7 +214,9 @@ export default function CubePage({ settings, updateSettings }: CubePageProps) {
           className="h-[46vh] min-h-[300px] w-full sm:h-[52vh]"
           reducedMotion={settings.reducedMotion}
           scale={settings.cubeScale}
+          animationSpeed={settings.animationSpeed}
           onSolvedChange={handleSolved}
+          onUserMove={recordMove}
         />
 
         {settings.showNotation && (
@@ -182,7 +241,20 @@ export default function CubePage({ settings, updateSettings }: CubePageProps) {
           ))}
         </div>
 
-        <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-6 gap-2">
+          {doubleButtons.map(({ label, move }) => (
+            <button
+              key={label}
+              onClick={() => applyMove(move)}
+              aria-label={`Turn ${label}`}
+              className="glass rounded-lg py-2 font-mono text-xs font-semibold transition-transform active:scale-95"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-6">
           <button onClick={scrambleNow} className="flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98]">
             <Shuffle size={16} /> Scramble
           </button>
@@ -194,6 +266,29 @@ export default function CubePage({ settings, updateSettings }: CubePageProps) {
           </button>
           <button onClick={redo} disabled={cursor >= moves.length} className="flex items-center justify-center gap-2 rounded-xl bg-neutral-200/70 py-3 text-sm font-semibold transition-transform active:scale-[0.98] disabled:opacity-40 dark:bg-neutral-800">
             <Redo2 size={16} /> Redo
+          </button>
+          <button
+            onClick={solveNow}
+            disabled={solverStatus !== 'ready' || solving || (cubeRef.current?.isSolved() ?? false)}
+            className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
+            title={
+              solverStatus === 'warming'
+                ? 'Preparing solver…'
+                : solverStatus === 'failed'
+                  ? 'Solver unavailable'
+                  : solverStatus === 'ready'
+                    ? 'Find a solution'
+                    : 'Loading solver'
+            }
+          >
+            {solving ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} Solve
+          </button>
+          <button
+            onClick={resetCamera}
+            aria-label="Reset camera angle"
+            className="flex items-center justify-center gap-2 rounded-xl bg-neutral-200/70 py-3 text-sm font-semibold transition-transform active:scale-[0.98] dark:bg-neutral-800"
+          >
+            <Crosshair size={16} /> Camera
           </button>
         </div>
       </main>
