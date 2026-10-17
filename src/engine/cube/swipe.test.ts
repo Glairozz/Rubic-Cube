@@ -47,12 +47,56 @@ describe('resolveSwipe', () => {
     }
   })
 
-  it('middle cubie (top-face center) returns orbit', () => {
+  it('top-face center swiped +x → S (front-to-back slice)', () => {
     const normal = { x: 0, y: 1, z: 0 }
     const cubie = { x: 0, y: 1, z: 0 }
     const drag = { x: 1, y: 0, z: 0 }
     const res = resolveSwipe(normal, cubie, drag)
-    expect(res.kind).toBe('orbit')
+    expect(res).toEqual({ kind: 'turn', move: { face: 'S', modifier: '' } })
+  })
+
+  it('swiping the front middle row gives E / E\'', () => {
+    const normal = { x: 0, y: 0, z: 1 }
+    const cubie = { x: 0, y: 0, z: 1 }
+    expect(resolveSwipe(normal, cubie, { x: 1, y: 0, z: 0 })).toEqual({
+      kind: 'turn',
+      move: { face: 'E', modifier: '' },
+    })
+    expect(resolveSwipe(normal, cubie, { x: -1, y: 0, z: 0 })).toEqual({
+      kind: 'turn',
+      move: { face: 'E', modifier: "'" },
+    })
+  })
+
+  it("swiping the front middle column gives M' / M", () => {
+    const normal = { x: 0, y: 0, z: 1 }
+    const cubie = { x: 0, y: 0, z: 1 }
+    expect(resolveSwipe(normal, cubie, { x: 0, y: 1, z: 0 })).toEqual({
+      kind: 'turn',
+      move: { face: 'M', modifier: "'" },
+    })
+    expect(resolveSwipe(normal, cubie, { x: 0, y: -1, z: 0 })).toEqual({
+      kind: 'turn',
+      move: { face: 'M', modifier: '' },
+    })
+  })
+
+  it('opposite middle-slice drags give inverse moves', () => {
+    const cases = [
+      { normal: { x: 0, y: 0, z: 1 }, cubie: { x: 0, y: 0, z: 1 }, drag: { x: 1, y: 0, z: 0 } },
+      { normal: { x: 0, y: 0, z: 1 }, cubie: { x: 0, y: 0, z: 1 }, drag: { x: 0, y: 1, z: 0 } },
+      { normal: { x: 0, y: 1, z: 0 }, cubie: { x: 0, y: 1, z: 0 }, drag: { x: 1, y: 0, z: 0 } },
+      { normal: { x: 1, y: 0, z: 0 }, cubie: { x: 1, y: 0, z: 0 }, drag: { x: 0, y: 1, z: 0 } },
+    ]
+    for (const c of cases) {
+      const a = resolveSwipe(c.normal, c.cubie, c.drag)
+      const b = resolveSwipe(c.normal, c.cubie, { x: -c.drag.x, y: -c.drag.y, z: -c.drag.z })
+      expect(a.kind).toBe('turn')
+      expect(b.kind).toBe('turn')
+      if (a.kind === 'turn' && b.kind === 'turn') {
+        expect(b.move).toEqual(invertMove(a.move))
+      }
+    }
   })
 
   it('opposite drag gives inverse move', () => {

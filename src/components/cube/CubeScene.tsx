@@ -5,8 +5,9 @@ import {
   FACE_AXIS,
   FACE_LAYER_INDEX,
   moveAngle,
-  type Face,
+  pieceLayerValue,
   type Move,
+  type Piece,
 } from '../../engine/moves/moves'
 import { resolveSwipe } from '../../engine/cube/swipe'
 import { decideTurn, settleDuration, stepTurn } from '../../engine/cube/gesture'
@@ -86,8 +87,8 @@ type Cubie = THREE.Group
 interface ActiveTurn {
   pivot: THREE.Group
   cubies: Cubie[]
-  face: Face
-  /** Rotation axis in cube-local space: the outward normal of the face. */
+  face: Piece
+  /** Rotation axis in cube-local space: the outward normal of the layer. */
   axis: THREE.Vector3
   /**
    * 'follow' — the layer tracks the finger and no move exists yet.
@@ -136,6 +137,16 @@ interface Gesture {
   perp0: THREE.Vector3 | null
   along0: THREE.Vector3 | null
   centerWorld: THREE.Vector3 | null
+  /**
+   * Screen-space direction and pixels-per-radian of the grabbed sticker for a
+   * positive rotation, sampled once when the layer is grabbed and held fixed for
+   * the whole gesture. Re-deriving it every frame lets the projected velocity
+   * curve away from a straight drag until it is perpendicular to it, which
+   * stalls one drag direction well below the commit threshold.
+   */
+  followTanX: number
+  followTanY: number
+  followPpr: number
 }
 
 interface SceneState {
@@ -391,11 +402,52 @@ const CubeScene = forwardRef<CubeSceneHandle, Props>(function CubeScene(
         },
         state: () => stateToFacelet(s.logic),
         view: () => ({ rotX: s.targetRotX, rotY: s.targetRotY, dist: s.targetDist }),
+        /**
+         * Test aid: each cubelet's home lattice cell plus its current snapped
+         * cell and orientation. Lets the dev hook prove that whole slices move
+         * together and that nothing drifts off the lattice.
+         */
+        snapshot: () =>
+          s.cubies.map((c) => {
+            const home = c.userData.home as [number, number, number] | undefined
+            return {
+              home: home ? [...home] : null,
+              pos: [
+                Math.round(c.position.x / GAP),
+                Math.round(c.position.y / GAP),
+                Math.round(c.position.z / GAP),
+              ],
+              quat: [
+                Number(c.quaternion.x.toFixed(4)),
+                Number(c.quaternion.y.toFixed(4)),
+                Number(c.quaternion.z.toFixed(4)),
+                Number(c.quaternion.w.toFixed(4)),
+              ],
+            }
+          }),
         /** Predict the swipe decision for a drag from (clientX, clientY) by (dx, dy) px. */
         resolve(clientX: number, clientY: number, dx: number, dy: number) {
           const hit = hitCubie(clientX, clientY)
           if (!hit) return { kind: 'orbit', move: null }
           return resolveDrag(clientX, clientY, clientX + dx, clientY + dy, hit.normal, hit.point, hit.cubie.position)
+        },
+        turnInfo() {
+          const a = s.active
+          const g = s.gesture
+          return {
+            mode: g?.mode ?? null,
+            face: a?.face ?? null,
+            phase: a?.phase ?? null,
+            angle: a?.angle ?? 0,
+            from: a?.from ?? 0,
+            target: a?.target ?? 0,
+            lastX: g?.lastX ?? null,
+            downX: g?.downX ?? null,
+            point: g?.point ? [g.point.x, g.point.y, g.point.z] : null,
+            perp0: g?.perp0 ? [g.perp0.x, g.perp0.y, g.perp0.z] : null,
+            axisWorld: g?.axisWorld ? [g.axisWorld.x, g.axisWorld.y, g.axisWorld.z] : null,
+            along0: g?.along0 ? [g.along0.x, g.along0.y, g.along0.z] : null,
+          }
         },
         debug(clientX: number, clientY: number) {
           setPointer(clientX, clientY)
@@ -438,16 +490,18 @@ const CubeScene = forwardRef<CubeSceneHandle, Props>(function CubeScene(
       g.midY = (pts[0].y + pts[1].y) / 2
     }
 
-    /** Attach the nine cubelets of a layer to a fresh pivot at the cube centre. */
+    /**
+     * Attach the nine cubelets of a layer to a fresh pivot at the cube centre.
+     * Outer faces select the ±1 layer; middle slices (M/E/S) select the 0 layer.
+     */
     const createPivot = (move: Move) => {
-      const axisVals = FACE_AXIS[move.face]
       const layerIdx = FACE_LAYER_INDEX[move.face]
+      const layerValue = pieceLayerValue(move.face)
       const pivot = new THREE.Group()
       s.cubeGroup.add(pivot)
-      const layer = s.cubies.filter((c) => {
-        const grid = Math.round(c.position.getComponent(layerIdx) / GAP)
-        return grid * axisVals[layerIdx] === 1
-      })
+      const layer = s.cubies.filter(
+        (c) => Math.round(c.position.getComponent(layerIdx) / GAP) === layerValue,
+      )
       layer.forEach((c) => pivot.attach(c))
       return { pivot, layer }
     }
@@ -472,7 +526,7 @@ const CubeScene = forwardRef<CubeSceneHandle, Props>(function CubeScene(
     }
 
     /** The finger grabbed a sticker: attach the layer and follow the finger from now on. */
-    const startFollowTurn = (g: Gesture, move: Move) => {
+    const startFollowTurn = (g: Gesture, move: Move, curX: number, curY: number) => {
       const { pivot, layer } = createPivot(move)
       const axis = new THREE.Vector3(FACE_AXIS[move.face][0], FACE_AXIS[move.face][1], FACE_AXIS[move.face][2])
 
@@ -507,6 +561,34 @@ const CubeScene = forwardRef<CubeSceneHandle, Props>(function CubeScene(
       // swipe threshold still counts toward the turn.
       g.lastX = g.downX
       g.lastY = g.downY
+
+      // Freeze the grabbed sticker's screen-space direction and speed for a
+      // positive rotation now. Re-projecting the live 3D velocity every frame
+      // lets it curve away from a straight drag until it is perpendicular to it,
+      // which stalls one drag direction below the commit threshold — freezing it
+      // keeps the finger-to-angle mapping linear and symmetric.
+      const dTheta = 0.02
+      const velocity0 = new THREE.Vector3().crossVectors(axisWorld, perp0)
+      const from = projectToClient(g.point!)
+      const to = projectToClient(g.point!.clone().addScaledVector(velocity0, dTheta))
+      let sx = to.x - from.x
+      let sy = to.y - from.y
+      let len = Math.hypot(sx, sy)
+      if (len < 1e-4) {
+        // Sticker grazes the silhouette and barely moves on screen for a
+        // rotation: fall back to the direction the finger is already travelling.
+        sx = curX - g.downX
+        sy = curY - g.downY
+        len = Math.hypot(sx, sy)
+      }
+      if (len < 1e-6) {
+        sx = 1
+        sy = 0
+        len = 1
+      }
+      g.followTanX = sx / len
+      g.followTanY = sy / len
+      g.followPpr = len / dTheta / DRAG_GAIN
       g.mode = 'turn'
     }
 
@@ -608,6 +690,9 @@ const CubeScene = forwardRef<CubeSceneHandle, Props>(function CubeScene(
         perp0: null,
         along0: null,
         centerWorld: null,
+        followTanX: 1,
+        followTanY: 0,
+        followPpr: 0,
       }
     }
 
@@ -651,37 +736,14 @@ const CubeScene = forwardRef<CubeSceneHandle, Props>(function CubeScene(
 
       if (g.mode === 'turn') {
         const active = s.active
-        if (
-          !active ||
-          active.phase !== 'follow' ||
-          !g.axisWorld ||
-          !g.perp0 ||
-          !g.along0 ||
-          !g.centerWorld
-        ) {
-          return
-        }
-        // Where the grabbed point sits now that the layer has turned by `active.angle`.
-        const perp = g.perp0.clone().applyAxisAngle(g.axisWorld, active.angle)
-        const pointOnLayer = g.centerWorld.clone().add(g.along0).add(perp)
-        // Screen direction and speed of that point for a positive rotation.
-        const velocity = new THREE.Vector3().crossVectors(g.axisWorld, perp)
-        const dTheta = 0.02
-        const ahead = pointOnLayer.clone().addScaledVector(velocity, dTheta)
-        const from = projectToClient(pointOnLayer)
-        const to = projectToClient(ahead)
-        const sx = to.x - from.x
-        const sy = to.y - from.y
-        const len = Math.hypot(sx, sy)
-        if (len < 1e-6) return
-        const pixelsPerRadian = len / dTheta / DRAG_GAIN
+        if (!active || active.phase !== 'follow') return
         const angle = stepTurn(
           active.angle,
           e.clientX - g.lastX,
           e.clientY - g.lastY,
-          sx / len,
-          sy / len,
-          pixelsPerRadian,
+          g.followTanX,
+          g.followTanY,
+          g.followPpr,
         )
         g.lastX = e.clientX
         g.lastY = e.clientY
@@ -707,7 +769,7 @@ const CubeScene = forwardRef<CubeSceneHandle, Props>(function CubeScene(
 
       const decision = resolveDrag(g.downX, g.downY, e.clientX, e.clientY, g.normal, g.point, g.cubie.position)
       if (decision.kind === 'turn') {
-        startFollowTurn(g, decision.move)
+        startFollowTurn(g, decision.move, e.clientX, e.clientY)
       } else {
         // Not a single-layer turn (e.g. a face-center sticker): orbit the view.
         g.mode = 'orbit'
@@ -748,6 +810,9 @@ const CubeScene = forwardRef<CubeSceneHandle, Props>(function CubeScene(
             perp0: null,
             along0: null,
             centerWorld: null,
+            followTanX: 1,
+            followTanY: 0,
+            followPpr: 0,
           }
         } else {
           s.gesture = null
@@ -961,6 +1026,7 @@ function rebuildCube(
       for (let z = -1; z <= 1; z++) {
         const cubie = new THREE.Group()
         cubie.userData.cubie = true
+        cubie.userData.home = [x, y, z]
         cubie.add(new THREE.Mesh(bodyGeometry, materials.core))
         if (x === 1) addSticker(cubie, 'px', stickerGeometry, materials.px)
         if (x === -1) addSticker(cubie, 'nx', stickerGeometry, materials.nx)

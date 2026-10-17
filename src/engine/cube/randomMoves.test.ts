@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { applyMoveToState, createCube, isCubeSolved, stateToFacelet } from './cubeModel'
-import { FACE_AXIS, FACE_LAYER_INDEX, invertMove, type Face, type Modifier, type Move } from '../moves/moves'
+import { FACE_LAYER_INDEX, invertMove, pieceLayerValue, SLICES, type Face, type Modifier, type Move, type Piece } from '../moves/moves'
 import { resolveSwipe } from './swipe'
 
 const FACES: Face[] = ['U', 'D', 'F', 'B', 'R', 'L']
+/** Faces and middle slices together — the engine must treat them alike. */
+const PIECES: Piece[] = [...FACES, ...SLICES]
 const MODIFIERS: Modifier[] = ['', "'", '2']
 
 /** Tiny deterministic LCG so failures are reproducible. */
@@ -16,13 +18,14 @@ function makeRandom(seed: number) {
 }
 
 describe('mechanical consistency', () => {
-  it('remains a valid cube after 400 random moves; the inverse sequence restores solved', () => {
+  it('remains a valid cube after 400 random face+slice moves; the inverse sequence restores solved', () => {
     const random = makeRandom(20261016)
     const history: Move[] = []
     let cube = createCube()
     for (let i = 0; i < 400; i++) {
       const move: Move = {
-        face: FACES[Math.floor(random() * FACES.length)],
+        // Includes M/E/S so middle slices are exercised, not just outer faces.
+        face: PIECES[Math.floor(random() * PIECES.length)],
         modifier: MODIFIERS[Math.floor(random() * MODIFIERS.length)],
       }
       history.push(move)
@@ -74,11 +77,11 @@ describe('mechanical consistency', () => {
             const decision = resolveSwipe(n, cubie, drag)
             if (decision.kind !== 'turn') continue
             turns++
-            const axis = FACE_AXIS[decision.move.face]
             const idx = FACE_LAYER_INDEX[decision.move.face]
             const component = idx === 0 ? cubie.x : idx === 1 ? cubie.y : cubie.z
-            // The touched cubie must lie in the outer layer that gets turned.
-            expect(component * axis[idx]).toBe(1)
+            // The touched cubie must lie in the layer that gets turned:
+            // ±1 for an outer face, 0 for a middle slice.
+            expect(component).toBe(pieceLayerValue(decision.move.face))
           }
         }
       }

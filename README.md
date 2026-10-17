@@ -6,7 +6,7 @@ A fully interactive, browser-based 3D Rubik's Cube simulation with realistic phy
 
 ### 🎯 Core Gameplay
 - **Full 3D Cube**: Realistic Rubik's Cube with all 6 faces and 54 colored stickers
-- **Complete Rotation Set**: All standard rotations (U, D, F, B, R, L) and their inverses
+- **Complete Rotation Set**: All standard rotations (U, D, F, B, R, L), the middle slices (M, E, S) and their inverses
 - **Accurate Mechanics**: Proper cube state management and adjacency logic
 - **Smooth Animations**: Fluid transitions with adjustable speed controls
 
@@ -59,14 +59,18 @@ A fully interactive, browser-based 3D Rubik's Cube simulation with realistic phy
 ### Keyboard Shortcuts
 | Key | Action |
 |-----|--------|
-| Q | Rotate Up (U) face clockwise |
-| W | Rotate Front (F) face clockwise |
-| E | Rotate Right (R) face clockwise |
-| A | Rotate Left (L) face clockwise |
-| S | Rotate Back (B) face clockwise |
-| D | Rotate Down (D) face clockwise |
-| Space | Scramble cube |
-| Enter | Auto-solve cube |
+| R / L / U / D / F / B | Turn that outer face clockwise |
+| Shift + letter | Turn counter-clockwise |
+| M | Turn the vertical middle slice clockwise (like L) |
+| E | Turn the horizontal middle slice clockwise (like D) |
+| S | Turn the front-to-back middle slice clockwise (like F) |
+| Shift + M/E/S | Turn that slice counter-clockwise |
+| Z / Y | Undo / redo |
+| Space | Start / stop timer |
+
+You can also drag any sticker — including the middle rows and columns — to
+turn the layer under your finger. Release past 45° to commit the turn (past
+135° gives a 180° turn).
 
 ### Rotation Notation
 - **U, D**: Up/Down face

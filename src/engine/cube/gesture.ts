@@ -1,4 +1,4 @@
-import type { Face, Move } from '../moves/moves'
+import type { Move, Piece } from '../moves/moves'
 
 /** How far (radians) a layer may travel while tracking the finger (~140°). */
 export const FOLLOW_LIMIT = 2.45
@@ -45,15 +45,16 @@ export function stepTurn(
  * - below HALF_TURN_THRESHOLD it snaps a quarter turn in the drag direction
  * - beyond that it snaps a half turn (e.g. dragging R past 135° gives R2)
  *
- * `angle` is measured around the face's outward normal, so a positive angle
- * is counter-clockwise seen from outside the face (standard `?` notation).
+ * `angle` is measured around the layer's outward normal (the face normal for
+ * an outer turn, the reference normal for a slice), so a positive angle is
+ * counter-clockwise seen from outside that layer (standard `?` notation).
  */
-export function decideTurn(face: Face, angle: number): { target: number; move: Move | null } {
+export function decideTurn(piece: Piece, angle: number): { target: number; move: Move | null } {
   const magnitude = Math.abs(angle)
   const sign = angle < 0 ? -1 : 1
   if (magnitude < COMMIT_THRESHOLD) return { target: 0, move: null }
-  if (magnitude >= HALF_TURN_THRESHOLD) return { target: sign * HALF_TURN, move: { face, modifier: '2' } }
-  return { target: sign * QUARTER_TURN, move: { face, modifier: sign > 0 ? "'" : '' } }
+  if (magnitude >= HALF_TURN_THRESHOLD) return { target: sign * HALF_TURN, move: { face: piece, modifier: '2' } }
+  return { target: sign * QUARTER_TURN, move: { face: piece, modifier: sign > 0 ? "'" : '' } }
 }
 
 /** Duration (ms) for the snap animation after a release, proportional to the remaining angle. */

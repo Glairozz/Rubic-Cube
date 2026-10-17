@@ -10,7 +10,7 @@ import KeyboardHelpModal from '../components/controls/KeyboardHelpModal'
 import { useTimer } from '../hooks/useTimer'
 import { useSolver } from '../hooks/useSolver'
 import { generateScramble, scrambleToString } from '../engine/scramble/scramble'
-import { formatMove, invertMove, parseMove, type Move } from '../engine/moves/moves'
+import { formatMove, invertMove, parseMove, type Move, type Piece } from '../engine/moves/moves'
 import { algorithmToMoves } from '../engine/cube/cubeModel'
 import { solveFacelet } from '../engine/cube/solver'
 import type { Settings } from '../hooks/useSettings'
@@ -19,6 +19,16 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 interface CubePageProps {
   settings: Settings
   updateSettings: <K extends keyof Settings>(key: K, value: Settings[K]) => void
+}
+
+/**
+ * Keyboard letters for every turnable layer. The six outer faces keep their
+ * letter; the middle slices use M (vertical), E (horizontal) and S (front-back).
+ * Shift inverts the turn.
+ */
+const KEY_TO_PIECE: Record<string, Piece> = {
+  r: 'R', l: 'L', u: 'U', d: 'D', f: 'F', b: 'B',
+  m: 'M', e: 'E', s: 'S',
 }
 
 export default function CubePage({ settings, updateSettings }: CubePageProps) {
@@ -141,9 +151,9 @@ export default function CubePage({ settings, updateSettings }: CubePageProps) {
       if (settingsOpen || helpOpen) return
       const key = e.key.toLowerCase()
       const inverse = e.shiftKey
-      if (['r', 'l', 'u', 'd', 'f', 'b'].includes(key) && !e.ctrlKey && !e.metaKey) {
-        const face = key.toUpperCase() as Move['face']
-        applyMove({ face, modifier: inverse ? "'" : '' })
+      const piece = KEY_TO_PIECE[key]
+      if (piece && !e.ctrlKey && !e.metaKey) {
+        applyMove({ face: piece, modifier: inverse ? "'" : '' })
         setStatus('Turning')
         return
       }
@@ -179,7 +189,19 @@ export default function CubePage({ settings, updateSettings }: CubePageProps) {
     { label: "L'", move: { face: 'L', modifier: "'" } },
   ]
 
-  const doubleButtons: Array<{ label: string; move: Move }> = ['U2', 'D2', 'F2', 'B2', 'R2', 'L2'].map((n) => ({
+  const sliceButtons: Array<{ label: string; move: Move }> = [
+    { label: 'M', move: { face: 'M', modifier: '' } },
+    { label: "M'", move: { face: 'M', modifier: "'" } },
+    { label: 'E', move: { face: 'E', modifier: '' } },
+    { label: "E'", move: { face: 'E', modifier: "'" } },
+    { label: 'S', move: { face: 'S', modifier: '' } },
+    { label: "S'", move: { face: 'S', modifier: "'" } },
+  ]
+
+  const doubleButtons: Array<{ label: string; move: Move }> = [
+    'U2', 'D2', 'F2', 'B2', 'R2', 'L2',
+    'M2', 'E2', 'S2',
+  ].map((n) => ({
     label: n,
     move: parseMove(n),
   }))
@@ -235,6 +257,19 @@ export default function CubePage({ settings, updateSettings }: CubePageProps) {
               key={label}
               onClick={() => applyMove(move)}
               className="glass rounded-xl py-3 font-mono text-sm font-semibold transition-transform active:scale-95"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          {sliceButtons.map(({ label, move }) => (
+            <button
+              key={label}
+              onClick={() => applyMove(move)}
+              aria-label={`Turn middle slice ${label}`}
+              className="glass rounded-xl py-3 font-mono text-sm font-semibold text-blue-600 transition-transform active:scale-95 dark:text-blue-300"
             >
               {label}
             </button>
